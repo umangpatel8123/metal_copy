@@ -7,7 +7,7 @@ import router from './routes/index.js';  // assuming you have routes here
 
 dotenv.config();
 
-const hostname = '127.0.0.1';   // local loopback
+const hostname = '0.0.0.0';   // local loopback
 
 const mongoUrl = process.env.MONGO_CONNECTION_STRING || process.env.DB_URL;
 

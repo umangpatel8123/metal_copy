@@ -7,6 +7,8 @@ import Customer from '../models/Customer.js';
 import CustomerTransaction from '../models/CustomerTransaction.js';
 import Vendor from '../models/Vendor.js';
 import VendorTransaction from '../models/VendorTransaction.js';
+import { Readable } from 'stream';
+import cloudinary from '../utils/cloudinary.js'; // Ensure this is correctly set up
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,8 +50,6 @@ const backupDir = path.join(__dirname, '../backup');
 
 export const backupAndClear = async (req, res) => {
   try {
-    await fs.mkdir(backupDir, { recursive: true });
-
     const collections = {
       ActivityLog,
       Auth,
@@ -63,58 +63,56 @@ export const backupAndClear = async (req, res) => {
 
     for (const [name, model] of Object.entries(collections)) {
       try {
-        console.log(`Processing ${name}...`);
-        
-        // Check document count first
         const count = await model.countDocuments();
-        console.log(`${name}: ${count} documents`);
-        
         if (count === 0) {
           console.log(`${name} is empty, skipping...`);
           continue;
         }
-        
-        // Limit to prevent memory crash
+
         if (count > 50000) {
-          console.log(`${name} has ${count} documents - too large, skipping for safety`);
+          console.log(`${name} too large to backup safely, skipping...`);
           continue;
         }
 
-        // Use lean() for better memory performance
         const data = await model.find({}).lean();
-        
-        const filePath = path.join(backupDir, `${name}.json`);
-        
-        // Write file with error handling
-        try {
-          await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-          console.log(`${name} backup saved`);
-          resultFiles.push(`/backup/${name}.json`);
-        } catch (writeError) {
-          console.error(`Failed to write ${name}:`, writeError.message);
-          continue;
-        }
+        const jsonString = JSON.stringify(data, null, 2);
 
-        // Delete with confirmation
+        const uploadStream = () =>
+          new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              {
+                resource_type: 'raw',
+                folder: 'mongo_backups',
+                public_id: `${name}_${Date.now()}`,
+              },
+              (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+              }
+            );
+
+            Readable.from(jsonString).pipe(stream);
+          });
+
+        const uploadResult = await uploadStream();
+        resultFiles.push(uploadResult.secure_url);
+        console.log(`${name} backed up to Cloudinary`);
+
         const deleteResult = await model.deleteMany({});
         console.log(`${name}: Deleted ${deleteResult.deletedCount} documents`);
-
-      } catch (modelError) {
-        console.error(`Error with ${name}:`, modelError.message);
-        continue; // Skip this collection, continue with others
+      } catch (err) {
+        console.error(`❌ Error with ${name}:`, err.message);
+        continue;
       }
     }
 
     res.status(200).json({
       success: true,
-      message: `✅ ${resultFiles.length} collections backed up and cleared successfully.`,
+      message: `✅ ${resultFiles.length} collections backed up and cleared.`,
       files: resultFiles,
     });
-    
   } catch (err) {
     console.error('❌ Backup Error:', err.message);
-    
-    // Make sure response is sent
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: err.message });
     }

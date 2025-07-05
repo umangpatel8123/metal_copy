@@ -11,28 +11,52 @@ export const addVendorTransaction = async (req, res) => {
       date, remark, receiptUrl
     } = req.body;
 
+    if (!vendorId) return res.status(400).json({ error: 'Vendor ID is required' });
+
+    const isAmountValid = typeof amount === 'number' && amount !== 0;
+    const isFineValid = typeof fineWeight === 'number' && fineWeight !== 0;
+
+    if (!isAmountValid && !isFineValid) {
+      return res.status(400).json({ error: 'Either amount or fineWeight must be a non-zero number' });
+    }
+
+    if (isAmountValid && !['credit', 'debit'].includes(amountType)) {
+      return res.status(400).json({ error: 'Amount type must be credit or debit' });
+    }
+
+    if (isFineValid && !['credit', 'debit'].includes(fineWeightType)) {
+      return res.status(400).json({ error: 'Fine weight type must be credit or debit' });
+    }
+
     const vendor = await Vendor.findById(vendorId);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
 
-    let newCashBalance = vendor.cashBalance;
-    let newFineBalance = vendor.fineBalance;
+    let newCashBalance = vendor.cashBalance ?? 0;
+    let newFineBalance = vendor.fineBalance ?? 0;
 
-    if (amount && amountType === 'credit') newCashBalance += amount;
-    if (amount && amountType === 'debit') newCashBalance -= amount;
+    if (isAmountValid) {
+      newCashBalance += amountType === 'credit' ? amount : -amount;
+    }
 
-    if (fineWeight && fineWeightType === 'credit') newFineBalance += fineWeight;
-    if (fineWeight && fineWeightType === 'debit') newFineBalance -= fineWeight;
+    if (isFineValid) {
+      newFineBalance += fineWeightType === 'credit' ? fineWeight : -fineWeight;
+    }
 
     vendor.cashBalance = newCashBalance;
     vendor.fineBalance = newFineBalance;
     await vendor.save();
 
     const txn = new VendorTransaction({
-      vendorId, amount, amountType,
-      fineWeight, fineWeightType,
+      vendorId,
+      amount: isAmountValid ? amount : undefined,
+      amountType: isAmountValid ? amountType : undefined,
+      fineWeight: isFineValid ? fineWeight : undefined,
+      fineWeightType: isFineValid ? fineWeightType : undefined,
       cashBalance: newCashBalance,
       fineBalance: newFineBalance,
-      date, remark, receiptUrl
+      date: date ? new Date(date) : new Date(),
+      remark: remark ?? '',
+      receiptUrl: receiptUrl ?? ''
     });
 
     await txn.save();
@@ -47,6 +71,7 @@ export const addVendorTransaction = async (req, res) => {
 export const getVendorTransactions = async (req, res) => {
   try {
     const { vendorId } = req.body;
+    if (!vendorId) return res.status(400).json({ error: 'Vendor ID is required' });
     const transactions = await VendorTransaction.find({ vendorId }).sort({ date: 1 });
     res.json(transactions);
   } catch (err) {
@@ -57,32 +82,26 @@ export const getVendorTransactions = async (req, res) => {
 export const deleteVendorTransaction = async (req, res) => {
   try {
     const { transactionId } = req.body;
-    console.log("goalllll " + transactionId);
+    if (!transactionId) return res.status(400).json({ error: 'Transaction ID is required' });
 
     const txn = await VendorTransaction.findById(transactionId);
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
-    console.log("idd " + txn._id);
-    console.log("url " + txn.receiptUrl);
+
     const vendor = await Vendor.findById(txn.vendorId);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
 
-    // 👇 Delete Cloudinary receipt if exists
     if (txn.receiptUrl) {
       const decryptedUrl = txn.receiptUrl;
       const publicId = extractPublicId(decryptedUrl);
-      console.log('📄 Public ID to delete:', publicId);
-
       if (publicId) {
         try {
-          const result = await cloudinary.uploader.destroy(publicId);
-          console.log('✅ Cloudinary deletion result:', result);
+          await cloudinary.uploader.destroy(publicId);
         } catch (err) {
-          console.error('❌ Error deleting from Cloudinary:', err.message);
+          console.error('❌ Cloudinary deletion error:', err.message);
         }
       }
     }
 
-    // 👇 Reverse balances
     if (txn.amount && txn.amountType === 'credit') vendor.cashBalance -= txn.amount;
     if (txn.amount && txn.amountType === 'debit') vendor.cashBalance += txn.amount;
 
@@ -101,8 +120,8 @@ export const deleteVendorTransaction = async (req, res) => {
 
 export const deleteAllVendorTransactions = async (req, res) => {
   try {
-    console.log("goallllllll");
     const { vendorId } = req.body;
+    if (!vendorId) return res.status(400).json({ error: 'Vendor ID is required' });
 
     const vendor = await Vendor.findById(vendorId);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
@@ -113,11 +132,9 @@ export const deleteAllVendorTransactions = async (req, res) => {
       if (txn.receiptUrl) {
         const decryptedUrl = txn.receiptUrl;
         const publicId = extractPublicId(decryptedUrl);
-        console.log('🧹 Public ID:', publicId);
         if (publicId) {
           try {
-            const result = await cloudinary.uploader.destroy(publicId);
-            console.log('✅ Deleted:', result);
+            await cloudinary.uploader.destroy(publicId);
           } catch (err) {
             console.error('❌ Cloudinary deletion error:', err.message);
           }
@@ -138,21 +155,18 @@ export const deleteAllVendorTransactions = async (req, res) => {
   }
 };
 
-
-  export const getVendorReceiptByTxnId = async (req, res) => {
-    try {
-      const { transactionId } = req.body;
-  
-      if (!transactionId) {
-        return res.status(400).json({ error: 'Transaction ID is required' });
-      }
-  
-      const txn = await VendorTransaction.findById(transactionId);
-  
-      if (!txn) return res.status(404).json({ error: 'Vendor transaction not found' });
-  
-      res.json({ receiptUrl: txn.receiptUrl || '' });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+export const getVendorReceiptByTxnId = async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
     }
-  };
+
+    const txn = await VendorTransaction.findById(transactionId);
+    if (!txn) return res.status(404).json({ error: 'Vendor transaction not found' });
+
+    res.json({ receiptUrl: txn.receiptUrl || '' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

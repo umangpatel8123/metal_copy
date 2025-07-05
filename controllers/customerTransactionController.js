@@ -3,7 +3,6 @@ import CustomerTransaction from '../models/CustomerTransaction.js';
 import { logActivity } from '../utils/logActivity.js';
 import cloudinary, { extractPublicId } from '../utils/cloudinary.js';
 
-
 export const addCustomerTransaction = async (req, res) => {
   try {
     const {
@@ -12,28 +11,52 @@ export const addCustomerTransaction = async (req, res) => {
       date, remark, receiptUrl
     } = req.body;
 
+    if (!customerId) return res.status(400).json({ error: 'Customer ID is required' });
+
+    const isAmountValid = typeof amount === 'number' && amount !== 0;
+    const isFineValid = typeof fineWeight === 'number' && fineWeight !== 0;
+
+    if (!isAmountValid && !isFineValid) {
+      return res.status(400).json({ error: 'Either amount or fineWeight must be a non-zero number' });
+    }
+
+    if (isAmountValid && !['credit', 'debit'].includes(amountType)) {
+      return res.status(400).json({ error: 'Amount type must be credit or debit' });
+    }
+
+    if (isFineValid && !['credit', 'debit'].includes(fineWeightType)) {
+      return res.status(400).json({ error: 'Fine weight type must be credit or debit' });
+    }
+
     const customer = await Customer.findById(customerId);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    let newCashBalance = customer.cashBalance;
-    let newFineBalance = customer.fineBalance;
+    let newCashBalance = customer.cashBalance ?? 0;
+    let newFineBalance = customer.fineBalance ?? 0;
 
-    if (amount && amountType === 'credit') newCashBalance += amount;
-    if (amount && amountType === 'debit') newCashBalance -= amount;
+    if (isAmountValid) {
+      newCashBalance += amountType === 'credit' ? amount : -amount;
+    }
 
-    if (fineWeight && fineWeightType === 'credit') newFineBalance += fineWeight;
-    if (fineWeight && fineWeightType === 'debit') newFineBalance -= fineWeight;
+    if (isFineValid) {
+      newFineBalance += fineWeightType === 'credit' ? fineWeight : -fineWeight;
+    }
 
     customer.cashBalance = newCashBalance;
     customer.fineBalance = newFineBalance;
     await customer.save();
 
     const txn = new CustomerTransaction({
-      customerId, amount, amountType,
-      fineWeight, fineWeightType,
+      customerId,
+      amount: isAmountValid ? amount : undefined,
+      amountType: isAmountValid ? amountType : undefined,
+      fineWeight: isFineValid ? fineWeight : undefined,
+      fineWeightType: isFineValid ? fineWeightType : undefined,
       cashBalance: newCashBalance,
       fineBalance: newFineBalance,
-      date, remark, receiptUrl
+      date: date ? new Date(date) : new Date(),
+      remark: remark || '',
+      receiptUrl: receiptUrl || ''
     });
 
     await txn.save();
@@ -48,6 +71,7 @@ export const addCustomerTransaction = async (req, res) => {
 export const getCustomerTransactions = async (req, res) => {
   try {
     const { customerId } = req.body;
+    if (!customerId) return res.status(400).json({ error: 'Customer ID is required' });
     const transactions = await CustomerTransaction.find({ customerId }).sort({ date: 1 });
     res.json(transactions);
   } catch (err) {
@@ -58,6 +82,7 @@ export const getCustomerTransactions = async (req, res) => {
 export const deleteCustomerTransaction = async (req, res) => {
   try {
     const { transactionId } = req.body;
+    if (!transactionId) return res.status(400).json({ error: 'Transaction ID is required' });
 
     const txn = await CustomerTransaction.findById(transactionId);
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
@@ -65,23 +90,18 @@ export const deleteCustomerTransaction = async (req, res) => {
     const customer = await Customer.findById(txn.customerId);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    // 🔥 Cloudinary deletion if receiptUrl exists
     if (txn.receiptUrl) {
-      const decryptedUrl = txn.receiptUrl; // Already decrypted
+      const decryptedUrl = txn.receiptUrl;
       const publicId = extractPublicId(decryptedUrl);
-      console.log('🧾 Public ID to delete:', publicId);
-
       if (publicId) {
         try {
-          const result = await cloudinary.uploader.destroy(publicId);
-          console.log('✅ Cloudinary deletion result:', result);
+          await cloudinary.uploader.destroy(publicId);
         } catch (err) {
-          console.error('❌ Error deleting from Cloudinary:', err.message);
+          console.error('❌ Cloudinary deletion error:', err.message);
         }
       }
     }
 
-    // 🔁 Reverse balances
     if (txn.amount && txn.amountType === 'credit') customer.cashBalance -= txn.amount;
     if (txn.amount && txn.amountType === 'debit') customer.cashBalance += txn.amount;
 
@@ -101,6 +121,7 @@ export const deleteCustomerTransaction = async (req, res) => {
 export const deleteAllCustomerTransactions = async (req, res) => {
   try {
     const { customerId } = req.body;
+    if (!customerId) return res.status(400).json({ error: 'Customer ID is required' });
 
     const customer = await Customer.findById(customerId);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
@@ -111,11 +132,9 @@ export const deleteAllCustomerTransactions = async (req, res) => {
       if (txn.receiptUrl) {
         const decryptedUrl = txn.receiptUrl;
         const publicId = extractPublicId(decryptedUrl);
-        console.log('🧹 Customer Txn Public ID:', publicId);
         if (publicId) {
           try {
-            const result = await cloudinary.uploader.destroy(publicId);
-            console.log('✅ Deleted:', result);
+            await cloudinary.uploader.destroy(publicId);
           } catch (err) {
             console.error('❌ Cloudinary error:', err.message);
           }
@@ -136,21 +155,18 @@ export const deleteAllCustomerTransactions = async (req, res) => {
   }
 };
 
-
-  export const getCustomerReceiptByTxnId = async (req, res) => {
-    try {
-      const { transactionId } = req.body;
-  
-      if (!transactionId) {
-        return res.status(400).json({ error: 'Transaction ID is required' });
-      }
-  
-      const txn = await CustomerTransaction.findById(transactionId);
-  
-      if (!txn) return res.status(404).json({ error: 'Customer transaction not found' });
-  
-      res.json({ receiptUrl: txn.receiptUrl || '' });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+export const getCustomerReceiptByTxnId = async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
     }
-  };
+
+    const txn = await CustomerTransaction.findById(transactionId);
+    if (!txn) return res.status(404).json({ error: 'Customer transaction not found' });
+
+    res.json({ receiptUrl: txn.receiptUrl || '' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

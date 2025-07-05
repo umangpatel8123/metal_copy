@@ -40,3 +40,22 @@ export const setPin = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const checkPinExists = async (req, res) => {
+  try {
+    const count = await Auth.countDocuments();
+
+    if (count === 0) {
+      return res.json({ 
+        success: true,
+        message: 'PIN not set',
+        exists: false 
+      });
+    }
+
+    return res.json({ success: true, exists: true });
+  } catch (err) {
+    console.error('Error checking pin:', err);
+    return res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};

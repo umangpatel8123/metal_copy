@@ -14,7 +14,21 @@ export const encrypt = (text) => {
   return iv.toString('hex') + ':' + encrypted;
 };
 
+// export const decrypt = (data) => {
+//   const [ivHex, encryptedText] = data.split(':');
+//   const iv = Buffer.from(ivHex, 'hex');
+//   const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(secret, 'hex'), iv);
+//   let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+//   decrypted += decipher.final('utf8');
+//   return decrypted;
+// };
+
 export const decrypt = (data) => {
+  if (!data || !data.includes(':')) {
+    console.warn('⚠️ Skipping decryption, invalid format:', data);
+    return data; // or return null / throw custom error
+  }
+
   const [ivHex, encryptedText] = data.split(':');
   const iv = Buffer.from(ivHex, 'hex');
   const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(secret, 'hex'), iv);

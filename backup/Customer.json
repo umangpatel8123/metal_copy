@@ -1,0 +1,13 @@
+[
+  {
+    "_id": "686635fe9895fa18530b65cc",
+    "code": "d4b238fe9303d45a3f45ea2c1d610039:c698ecf635c69a4cd0e061b8ac701fe3",
+    "name": "12a72a28765e2f895beadd91cef9c79a:80be879a667a522f74a84753bdf3ad3a",
+    "phone": "1038986170cf6c8a589a7ee0b6dcfabc:028edcc3558114532c9ea926ca9ed758",
+    "cashBalance": -700,
+    "fineBalance": -1.5,
+    "createdAt": "2025-07-03T07:49:18.475Z",
+    "updatedAt": "2025-07-03T07:50:51.303Z",
+    "__v": 0
+  }
+]

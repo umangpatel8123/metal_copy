@@ -6,8 +6,13 @@ import activityLogRouter from './activityLogRoutes.js';
 import customerRouter from './customerRoutes.js';
 import customerTransactionRouter from './customerTransactionRoutes.js';
 import dashboardRouter from './dashboardRoutes.js';
+import maintenanceRouter from './maintenanceRoutes.js';
 
 const router = express.Router();
+
+router.get('/test', (req, res) => {
+  res.json({ message: 'Test route working 🎉' });
+});
 
 // Mount vendor routes
 router.use(vendorRouter);
@@ -23,5 +28,7 @@ router.use(customerRouter);
 router.use(customerTransactionRouter);
 // Mount dashboard routes
 router.use(dashboardRouter);
+// Mount maintenance routes
+router.use(maintenanceRouter);
 
 export default router;

@@ -48,6 +48,8 @@ const backupDir = path.join(__dirname, '../backup');
 //   }
 // };
 
+const BATCH_SIZE = 10000;
+
 export const backupAndClear = async (req, res) => {
   try {
     const collections = {
@@ -69,46 +71,38 @@ export const backupAndClear = async (req, res) => {
           continue;
         }
 
-        if (count > 50000) {
-          console.log(`${name} too large to backup safely, skipping...`);
-          continue;
+        console.log(`Backing up ${name} (${count} documents)`);
+
+        const cursor = model.find({}).lean().cursor();
+        let batch = [];
+        let batchIndex = 1;
+
+        for await (const doc of cursor) {
+          batch.push(doc);
+          if (batch.length === BATCH_SIZE) {
+            const uploaded = await uploadBatch(name, batch, batchIndex++);
+            resultFiles.push(uploaded.secure_url);
+            batch = []; // reset
+          }
         }
 
-        const data = await model.find({}).lean();
-        const jsonString = JSON.stringify(data, null, 2);
-
-        const uploadStream = () =>
-          new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-              {
-                resource_type: 'raw',
-                folder: 'mongo_backups',
-                public_id: `${name}_${Date.now()}`,
-              },
-              (error, result) => {
-                if (error) return reject(error);
-                resolve(result);
-              }
-            );
-
-            Readable.from(jsonString).pipe(stream);
-          });
-
-        const uploadResult = await uploadStream();
-        resultFiles.push(uploadResult.secure_url);
-        console.log(`${name} backed up to Cloudinary`);
+        // upload any remaining docs
+        if (batch.length > 0) {
+          const uploaded = await uploadBatch(name, batch, batchIndex++);
+          resultFiles.push(uploaded.secure_url);
+        }
 
         const deleteResult = await model.deleteMany({});
         console.log(`${name}: Deleted ${deleteResult.deletedCount} documents`);
       } catch (err) {
-        console.error(`❌ Error with ${name}:`, err.message);
+        console.error(`❌ Error processing ${name}:`, err.message);
         continue;
       }
     }
 
     res.status(200).json({
       success: true,
-      message: `✅ ${resultFiles.length} collections backed up and cleared.`,
+      message: `✅ Backed up and cleared all non-empty collections.`,
       files: resultFiles,
     });
   } catch (err) {
@@ -117,6 +111,27 @@ export const backupAndClear = async (req, res) => {
       res.status(500).json({ success: false, message: err.message });
     }
   }
+};
+
+const uploadBatch = (collectionName, dataBatch, index) => {
+  const jsonString = JSON.stringify(dataBatch, null, 2);
+
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'raw',
+        folder: 'mongo_backups',
+        public_id: `${collectionName}_batch_${index}_${Date.now()}`,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        console.log(`✅ Uploaded ${collectionName} batch ${index}`);
+        resolve(result);
+      }
+    );
+
+    Readable.from(jsonString).pipe(stream);
+  });
 };
 
 // Function to list existing backup files

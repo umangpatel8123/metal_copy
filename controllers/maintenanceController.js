@@ -67,11 +67,8 @@ export const backupAndClear = async (req, res) => {
       try {
         const count = await model.countDocuments();
         if (count === 0) {
-          console.log(`${name} is empty, skipping...`);
           continue;
         }
-
-        console.log(`Backing up ${name} (${count} documents)`);
 
         const cursor = model.find({}).lean().cursor();
         let batch = [];
@@ -93,7 +90,6 @@ export const backupAndClear = async (req, res) => {
         }
 
         const deleteResult = await model.deleteMany({});
-        console.log(`${name}: Deleted ${deleteResult.deletedCount} documents`);
       } catch (err) {
         console.error(`❌ Error processing ${name}:`, err.message);
         continue;
@@ -125,7 +121,6 @@ const uploadBatch = (collectionName, dataBatch, index) => {
       },
       (error, result) => {
         if (error) return reject(error);
-        console.log(`✅ Uploaded ${collectionName} batch ${index}`);
         resolve(result);
       }
     );

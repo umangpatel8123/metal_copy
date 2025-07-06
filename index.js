@@ -51,6 +51,6 @@ app.use((req, res) => {
 const hostname = '0.0.0.0'; // or '0.0.0.0' for all interfaces
 const port = process.env.PORT || 8000;
 
-app.listen(port, hostname, () => {
-  console.log(`🚀 Server running at http://${hostname}:${port}/`);
+app.listen(port, () => {
+  console.log(`🚀 Server running at http://localhost:${port}/`);
 });

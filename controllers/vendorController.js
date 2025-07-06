@@ -12,7 +12,6 @@ export const createVendor = async (req, res) => {
     }
 
     const existing = await Vendor.findOne({ code: code.trim() });
-    console.log('Existing vendor:', existing);
     if (existing) {
       return res.status(400).json({ error: 'Vendor with this code already exists' });
     }

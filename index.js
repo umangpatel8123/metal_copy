@@ -25,8 +25,16 @@ mongoose
 
 const app = express();
 
+// ✅ CORS: Must be placed BEFORE all routes
+app.use(cors({
+  origin: 'https://scoopsandstories.com',
+  credentials: true,
+}));
+
+// ✅ Optional: Add manual check if you want stricter enforcement
 app.use((req, res, next) => {
-  if (req.headers.origin && req.headers.origin !== 'https://scoopsandstories.com') {
+  const origin = req.headers.origin;
+  if (origin && origin !== 'https://scoopsandstories.com') {
     return res.status(403).json({ message: 'Forbidden: Origin not allowed' });
   }
   next();
@@ -40,7 +48,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
 });
 
-const port = process.env.PORT ;
+const port = process.env.PORT;
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });

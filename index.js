@@ -5,15 +5,13 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import router from './routes/index.js'; // Main route file
+import router from './routes/index.js';
 
 dotenv.config();
 
-// Determine __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// MongoDB connection
 const mongoUrl = process.env.MONGO_CONNECTION_STRING || process.env.DB_URL;
 
 mongoose
@@ -27,30 +25,22 @@ mongoose
 
 const app = express();
 
-// CORS configuration
-const corsOptions = {
-  origin: true,
-  credentials: true,
-  optionsSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  if (req.headers.origin && req.headers.origin !== 'https://scoopsandstories.com') {
+    return res.status(403).json({ message: 'Forbidden: Origin not allowed' });
+  }
+  next();
+});
+
 app.use(express.json());
-
-// Serve backup folder statically from inside project root
 app.use('/backup', express.static(path.join(__dirname, 'backup')));
-
-// API routes
 app.use('/api', router);
 
-// 404 Fallback
 app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
 });
 
-// Server setup
-const hostname = '0.0.0.0'; // or '0.0.0.0' for all interfaces
-const port = process.env.PORT || 8000;
-
+const port = process.env.PORT ;
 app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}/`);
+  console.log(`🚀 Server running on port ${port}`);
 });

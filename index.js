@@ -48,7 +48,10 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
 });
 
-const port = process.env.PORT;
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
+
+const hostname = '0.0.0.0'; // or '0.0.0.0' for all interfaces
+const port = process.env.PORT || 8000;
+
+app.listen(port, hostname, () => {
+  console.log(`🚀 Server running at http://${hostname}:${port}/`);
 });

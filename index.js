@@ -25,11 +25,16 @@ mongoose
 
 const app = express();
 
-// ✅ CORS: Must be placed BEFORE all routes
 app.use(cors({
-  origin: 'https://scoopsandstories.com',
-  credentials: true,
+  origin: '*',
 }));
+
+
+// ✅ CORS: Must be placed BEFORE all routes
+// app.use(cors({
+//   origin: 'https://scoopsandstories.com',
+//   credentials: true,
+// }));
 
 // ✅ Optional: Add manual check if you want stricter enforcement
 app.use((req, res, next) => {

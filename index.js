@@ -37,14 +37,14 @@ app.use(cors({
 // }));
 
 // ✅ Optional: Add manual check if you want stricter enforcement
-app.use((req, res, next) => {
+/*app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && origin !== 'https://scoopsandstories.com') {
     return res.status(403).json({ message: 'Forbidden: Origin not allowed' });
   }
   next();
 });
-
+*/
 app.use(express.json());
 app.use('/backup', express.static(path.join(__dirname, 'backup')));
 app.use('/api', router);

@@ -3,7 +3,8 @@ import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import Auth from '../models/Auth.js';
 
-const ALLOWED_EMAILS = ['umang3967@gmail.com', 'piyuthehero@gmail.com'];
+const ALLOWED_EMAILS = ['umang3967@gmail.com', 'piyuthehero@gmail.com','creativebirdstudio@gmail.com'];
+
 const otpStore = {};
 
 const transporter = nodemailer.createTransport({
